@@ -6,6 +6,9 @@ VescUart::VescUart(uint32_t timeout_ms) : _TIMEOUT(timeout_ms) {
 	nunchuck.valueY         = 127;
 	nunchuck.lowerButton  	= false;
 	nunchuck.upperButton  	= false;
+
+	counterAsync = 0;
+	endMessageAsync = 256;
 }
 
 void VescUart::setSerialPort(Stream* port)
@@ -88,6 +91,89 @@ int VescUart::receiveUartMessage(uint8_t * payloadReceived) {
 	if (messageRead) {
 		unpacked = unpackPayload(messageReceived, endMessage, payloadReceived);
 	}
+
+	if (unpacked) {
+		// Message was read
+		return lenPayload; 
+	}
+	else {
+		// No Message Read
+		return 0;
+	}
+}
+
+
+int VescUart::receiveUartMessageAsync(uint8_t * payloadReceived) {
+
+	// Messages <= 255 starts with "2", 2nd byte is length
+	// Messages > 255 starts with "3" 2nd and 3rd byte is length combined with 1st >>8 and then &0xFF
+
+	// Makes no sense to run this function if no serialPort is defined.
+	if (serialPort == NULL)
+		return -1;
+	
+	bool messageRead = false;
+	uint16_t lenPayload = 0;
+
+	while (serialPort->available()) {
+
+		messageReceivedAsync[counterAsync++] = serialPort->read();
+
+		if (counterAsync == 2) {
+
+			switch (messageReceivedAsync[0])
+			{
+				case 2:
+					endMessageAsync = messageReceivedAsync[1] + 5; //Payload size + 2 for sice + 3 for SRC and End.
+					lenPayload = messageReceivedAsync[1];
+				break;
+
+				case 3:
+					// ToDo: Add Message Handling > 255 (starting with 3)
+					if( debugPort != NULL ){
+						debugPort->println("Message is larger than 256 bytes - not supported");
+					}
+				break;
+
+				default:
+					if( debugPort != NULL ){
+						debugPort->println("Unvalid start bit");
+					}
+				break;
+			}
+		}
+
+		if (counterAsync >= sizeof(messageReceivedAsync)) {
+			break;
+		}
+
+		if (counterAsync == endMessageAsync && messageReceivedAsync[endMessageAsync - 1] == 3) {
+			messageReceivedAsync[endMessageAsync] = 0;
+			if (debugPort != NULL) {
+				debugPort->println("End of message reached!");
+			}
+			messageRead = true;
+			break; // Exit if end of message is reached, even if there is still more data in the buffer.
+		}
+	}
+
+
+	if(messageRead == false) {
+		return 0;
+	}
+	
+	bool unpacked = false;
+
+	if (messageRead) {
+		unpacked = unpackPayload(messageReceivedAsync, endMessageAsync, payloadReceived);
+	}
+
+	// Clear globals
+	for (unsigned int i = 0; i < sizeof(messageReceivedAsync);  ++i) {
+    	messageReceivedAsync[i] = (char)0;
+	}
+	counterAsync = 0;
+	endMessageAsync = 256;
 
 	if (unpacked) {
 		// Message was read
@@ -257,6 +343,10 @@ bool VescUart::getVescValues(void) {
 	return getVescValues(0);
 }
 
+bool VescUart::getVescValuesAsync(void) {
+	return getVescValues(0);
+}
+
 bool VescUart::getVescValues(uint8_t canId) {
 
 	if (debugPort!=NULL){
@@ -282,6 +372,33 @@ bool VescUart::getVescValues(uint8_t canId) {
 	}
 	return false;
 }
+
+bool VescUart::getVescValuesAsync(uint8_t canId) {
+
+	if (debugPort!=NULL){
+		debugPort->println("Command: COMM_GET_VALUES "+String(canId));
+	}
+
+	int32_t index = 0;
+	int payloadSize = (canId == 0 ? 1 : 3);
+	uint8_t payload[payloadSize];
+	if (canId != 0) {
+		payload[index++] = { COMM_FORWARD_CAN };
+		payload[index++] = canId;
+	}
+	payload[index++] = { COMM_GET_VALUES };
+
+	packSendPayload(payload, payloadSize);
+
+	uint8_t message[256];
+	int messageLength = receiveUartMessageAsync(message);
+
+	if (messageLength > 55) {
+		return processReadPacket(message); 
+	}
+	return false;
+}
+
 void VescUart::setNunchuckValues() {
 	return setNunchuckValues(0);
 }

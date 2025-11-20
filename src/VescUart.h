@@ -45,6 +45,10 @@ class VescUart
 	//Timeout - specifies how long the function will wait for the vesc to respond
 	const uint32_t _TIMEOUT;
 
+  uint8_t messageReceivedAsync[256];
+  uint16_t counterAsync;
+	uint16_t endMessageAsync;
+
 	public:
 		/**
 		 * @brief      Class constructor
@@ -96,11 +100,26 @@ class VescUart
 
         /**
          * @brief      Sends a command to VESC and stores the returned data
+         *
+         * @return     True if successfull otherwise false
+         */
+        bool getVescValuesAsync(void);
+
+        /**
+         * @brief      Sends a command to VESC and stores the returned data
          * @param      canId  - The CAN ID of the VESC
          *
          * @return     True if successfull otherwise false
          */
         bool getVescValues(uint8_t canId);
+
+        /**
+         * @brief      Sends a command to VESC and stores the returned data
+         * @param      canId  - The CAN ID of the VESC
+         *
+         * @return     True if successfull otherwise false
+         */
+        bool getVescValuesAsync(uint8_t canId);
 
         /**
          * @brief      Sends values for joystick and buttons to the nunchuck app
@@ -206,6 +225,14 @@ class VescUart
 		 * @return     The number of bytes receeived within the payload
 		 */
 		int receiveUartMessage(uint8_t * payloadReceived);
+
+    /**
+		 * @brief      Receives the message over Serial
+		 *
+		 * @param      payloadReceived  - The received payload as a unit8_t Array
+		 * @return     The number of bytes receeived within the payload
+		 */
+		int receiveUartMessageAsync(uint8_t * payloadReceived);
 
 		/**
 		 * @brief      Verifies the message (CRC-16) and extracts the payload
