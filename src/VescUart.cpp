@@ -9,6 +9,7 @@ VescUart::VescUart(uint32_t timeout_ms) : _TIMEOUT(timeout_ms) {
 
 	counterAsync = 0;
 	endMessageAsync = 256;
+	messageSentAsync = false;
 }
 
 void VescUart::setSerialPort(Stream* port)
@@ -112,8 +113,8 @@ int VescUart::receiveUartMessageAsync(uint8_t * payloadReceived) {
 	if (serialPort == NULL)
 		return -1;
 	
-	bool messageRead = false;
 	uint16_t lenPayload = 0;
+	bool messageRead = false;
 
 	while (serialPort->available()) {
 
@@ -174,6 +175,7 @@ int VescUart::receiveUartMessageAsync(uint8_t * payloadReceived) {
 	}
 	counterAsync = 0;
 	endMessageAsync = 256;
+	messageSentAsync = false;
 
 	if (unpacked) {
 		// Message was read
@@ -379,22 +381,25 @@ bool VescUart::getVescValuesAsync(uint8_t canId) {
 		debugPort->println("Command: COMM_GET_VALUES "+String(canId));
 	}
 
-	int32_t index = 0;
-	int payloadSize = (canId == 0 ? 1 : 3);
-	uint8_t payload[payloadSize];
-	if (canId != 0) {
-		payload[index++] = { COMM_FORWARD_CAN };
-		payload[index++] = canId;
-	}
-	payload[index++] = { COMM_GET_VALUES };
+	if (!messageSentAsync) {
+		int32_t index = 0;
+		int payloadSize = (canId == 0 ? 1 : 3);
+		uint8_t payload[payloadSize];
+		if (canId != 0) {
+			payload[index++] = { COMM_FORWARD_CAN };
+			payload[index++] = canId;
+		}
+		payload[index++] = { COMM_GET_VALUES };
 
-	packSendPayload(payload, payloadSize);
+		packSendPayload(payload, payloadSize);
+		messageSentAsync = true;
+	}
 
 	uint8_t message[256];
 	int messageLength = receiveUartMessageAsync(message);
 
 	if (messageLength > 55) {
-		return processReadPacket(message); 
+		return processReadPacket(message);
 	}
 	return false;
 }

@@ -48,6 +48,7 @@ class VescUart
   uint8_t messageReceivedAsync[256];
   uint16_t counterAsync;
 	uint16_t endMessageAsync;
+  bool messageSentAsync;
 
 	public:
 		/**
