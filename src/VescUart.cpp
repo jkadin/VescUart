@@ -22,6 +22,11 @@ void VescUart::setDebugPort(Stream* port)
 	debugPort = port;
 }
 
+void VescUart::setLogPort(Stream* port)
+{
+	logPort = port;
+}
+
 int VescUart::receiveUartMessage(uint8_t * payloadReceived) {
 
 	// Messages <= 255 starts with "2", 2nd byte is length
@@ -160,16 +165,22 @@ int VescUart::receiveUartMessageAsync(uint8_t * payloadReceived) {
 
 
 	if(messageRead == false) {
+		if (logPort!=NULL){
+			logPort->println("Didn't read message");
+		}
 		return 0;
 	}
 	
+	if (logPort!=NULL){
+		logPort->println("Read message!");
+	}
 	bool unpacked = false;
 
 	if (messageRead) {
 		unpacked = unpackPayload(messageReceivedAsync, endMessageAsync, payloadReceived);
 	}
 
-	// Clear globals
+	// Clear global
 	for (unsigned int i = 0; i < sizeof(messageReceivedAsync);  ++i) {
     	messageReceivedAsync[i] = (char)0;
 	}
@@ -346,7 +357,7 @@ bool VescUart::getVescValues(void) {
 }
 
 bool VescUart::getVescValuesAsync(void) {
-	return getVescValues(0);
+	return getVescValuesAsync(0);
 }
 
 bool VescUart::getVescValues(uint8_t canId) {
@@ -395,11 +406,15 @@ bool VescUart::getVescValuesAsync(uint8_t canId) {
 		messageSentAsync = true;
 	}
 
-	uint8_t message[256];
-	int messageLength = receiveUartMessageAsync(message);
+	int messageLength = receiveUartMessageAsync(messageAsync);
 
 	if (messageLength > 55) {
-		return processReadPacket(message);
+		bool status = processReadPacket(messageAsync);
+		// Clear global
+		for (unsigned int i = 0; i < sizeof(messageAsync);  ++i) {
+    		messageAsync[i] = (char)0;
+		}
+		return status;
 	}
 	return false;
 }
