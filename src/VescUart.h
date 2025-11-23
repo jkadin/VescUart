@@ -50,6 +50,7 @@ class VescUart
   uint16_t counterAsync;
 	uint16_t endMessageAsync;
   bool messageSentAsync;
+  uint16_t lenPayloadAsync;
 
 	public:
 		/**

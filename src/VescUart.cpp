@@ -75,6 +75,9 @@ int VescUart::receiveUartMessage(uint8_t * payloadReceived) {
 			}
 
 			if (counter >= sizeof(messageReceived)) {
+				if (logPort!=NULL){
+					logPort->println("Counter and message size don't match");
+				}
 				break;
 			}
 
@@ -94,12 +97,20 @@ int VescUart::receiveUartMessage(uint8_t * payloadReceived) {
 	
 	bool unpacked = false;
 
+	if (logPort!=NULL){
+		logPort->println("Check if message read");
+		logPort->println(lenPayload);
+	}
+
 	if (messageRead) {
 		unpacked = unpackPayload(messageReceived, endMessage, payloadReceived);
 	}
 
 	if (unpacked) {
 		// Message was read
+		if( logPort != NULL ){
+			logPort->println(lenPayload);
+		}
 		return lenPayload; 
 	}
 	else {
@@ -118,7 +129,6 @@ int VescUart::receiveUartMessageAsync(uint8_t * payloadReceived) {
 	if (serialPort == NULL)
 		return -1;
 	
-	uint16_t lenPayload = 0;
 	bool messageRead = false;
 
 	while (serialPort->available()) {
@@ -131,7 +141,7 @@ int VescUart::receiveUartMessageAsync(uint8_t * payloadReceived) {
 			{
 				case 2:
 					endMessageAsync = messageReceivedAsync[1] + 5; //Payload size + 2 for sice + 3 for SRC and End.
-					lenPayload = messageReceivedAsync[1];
+					lenPayloadAsync = messageReceivedAsync[1];
 				break;
 
 				case 3:
@@ -150,6 +160,9 @@ int VescUart::receiveUartMessageAsync(uint8_t * payloadReceived) {
 		}
 
 		if (counterAsync >= sizeof(messageReceivedAsync)) {
+			if (logPort!=NULL){
+				logPort->println("Counter and message size don't match");
+			}
 			break;
 		}
 
@@ -162,35 +175,34 @@ int VescUart::receiveUartMessageAsync(uint8_t * payloadReceived) {
 			break; // Exit if end of message is reached, even if there is still more data in the buffer.
 		}
 	}
-
-
-	if(messageRead == false) {
-		if (logPort!=NULL){
-			logPort->println("Didn't read message");
-		}
-		return 0;
-	}
 	
-	if (logPort!=NULL){
-		logPort->println("Read message!");
-	}
 	bool unpacked = false;
+
+	if (logPort!=NULL){
+		logPort->println("Check if message read");
+		logPort->println(lenPayloadAsync);
+	}
 
 	if (messageRead) {
 		unpacked = unpackPayload(messageReceivedAsync, endMessageAsync, payloadReceived);
+		// Clear global
+		for (unsigned int i = 0; i < sizeof(messageReceivedAsync);  ++i) {
+			messageReceivedAsync[i] = (char)0;
+		}
+		counterAsync = 0;
+		endMessageAsync = 256;
+		messageSentAsync = false;
+	} else {
+		// Haven't finished reading the message, nothing to unpack yet
+		return 0;
 	}
-
-	// Clear global
-	for (unsigned int i = 0; i < sizeof(messageReceivedAsync);  ++i) {
-    	messageReceivedAsync[i] = (char)0;
-	}
-	counterAsync = 0;
-	endMessageAsync = 256;
-	messageSentAsync = false;
 
 	if (unpacked) {
 		// Message was read
-		return lenPayload; 
+		if( logPort != NULL ){
+			logPort->println(lenPayloadAsync);
+		}
+		return lenPayloadAsync;
 	}
 	else {
 		// No Message Read
@@ -401,7 +413,6 @@ bool VescUart::getVescValuesAsync(uint8_t canId) {
 			payload[index++] = canId;
 		}
 		payload[index++] = { COMM_GET_VALUES };
-
 		packSendPayload(payload, payloadSize);
 		messageSentAsync = true;
 	}
@@ -409,11 +420,15 @@ bool VescUart::getVescValuesAsync(uint8_t canId) {
 	int messageLength = receiveUartMessageAsync(messageAsync);
 
 	if (messageLength > 55) {
+		if (logPort!=NULL){
+			logPort->println("message is long enough, let's process it");
+		}
 		bool status = processReadPacket(messageAsync);
 		// Clear global
 		for (unsigned int i = 0; i < sizeof(messageAsync);  ++i) {
     		messageAsync[i] = (char)0;
 		}
+		lenPayloadAsync = 0;
 		return status;
 	}
 	return false;
